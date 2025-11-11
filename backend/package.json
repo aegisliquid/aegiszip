@@ -1,0 +1,28 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "NODE_ENV=development node --watch src/index.js",
+    "start": "NODE_ENV=production node src/index.js",
+    "lint": "echo \"No linter configured\"",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@noble/hashes": "^2.0.1",
+    "@supabase/supabase-js": "^2.81.0",
+    "blake2": "^5.0.0",
+    "cors": "^2.8.5",
+    "crypto-js": "^4.2.0",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "secp256k1": "^5.0.1",
+    "socket.io": "^4.8.1",
+    "uuid": "^13.0.0"
+  }
+}
