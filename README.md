@@ -1,7 +1,7 @@
 # AegisLiq Market Ops Backend
 
 **CA:** Coming soon  
-**X:** [x.com/AegisLiq](https://x.com/AegisLiq)
+**X:** [x.com/AegisLiq](https://x.com/AegisLiquid)
 
 This package houses the backend prototype for AegisLiq’s market-making stack around Zcash ZIP 227 shielded assets. It does not submit transactions yet. Instead, it lets us model issuances, persist proposed program states, and observe how liquidity scenarios might unfold once ZIP 227 rails are live.
 
@@ -130,7 +130,7 @@ This backend is the rehearsal stage for AegisLiq liquidity ops. When ZIP 227 n
 # AegisLiq Backend Toolkit
 
 **CA:** Coming soon  
-**X:** [x.com/AegisLiq](https://x.com/AegisLiq)
+**X:** [x.com/AegisLiq](https://x.com/AegisLiquid)
 
 AegisLiq is building a liquidity command center for emerging meme ecosystems. This backend package powers our operator CLI: it lets us model token lifecycles, rehearse launch-day procedures, and wire future integrations without waiting on mainnet infrastructure. Think of it as the dry-run environment for every liquidity stunt we want to ship.
 
@@ -267,11 +267,7 @@ We’re keeping the project private while we stitch integrations together, but w
 
 # Zcash Meme Coin CLI Tool - ZIP 227 Implementation
 
-**CA:** `8RSbsKW26WhHsFsM6jc34zSijvq6r7t6GmkYrfj8pump`
-
 This repo is a hands-on sandbox for ZIP 227. You can explore how Zcash Shielded Assets (ZSAs) will work—derive issuers, mint assets, and track lifecycle events—even though Orchard ZSA isn’t live yet.
-
-**X:** [x.com/Zip227](https://x.com/Zip227)
 
 ## Overview
 
@@ -302,6 +298,109 @@ We track the current ZIP 227 spec: issuance keys follow the real hardened path, 
 - GroupHash and BLAKE2b implementations use simplified hashes — swap to real primitives before mainnet.
 
 See `docs/ZSA_COMPLIANCE.md` for a running checklist.
+
+## Mock Bonding Curve Sandbox
+
+- **Purpose**: Rapidly sketch token economics against ZIP 227 assets using a deterministic linear bonding curve that caps supply at 64-bit space.
+- **Curve model**: Price ticks follow `price = initialPrice + slope * supply`, computed with integer math and configurable precision (0–18 decimals).
+- **Helpers**: Access spot pricing, reserve depth, mint/burn quotes, and budget projections through `getSpotPrice`, `getReserveBalance`, `quoteMint`, `quoteBurn`, and `projectMintForBudget`.
+- **Metadata**: Include a `bondingCurve` object in the `POST /tokens` payload to persist `metadata.bondingCurve` with the resolved config plus a mint preview for front-ends.
+
+```116:141:backend/src/zsa/bondingCurve.js
+export class BondingCurveMock {
+  constructor({
+    initialPrice = "0.10",
+    slope = "0.00001",
+    maxSupply = UINT64_MAX,
+    decimals = DEFAULT_DECIMALS,
+  } = {}) {
+    this.decimals = normalizeDecimals(decimals);
+    this.scale = 10n ** BigInt(this.decimals);
+
+    this.initialPriceScaled = parseDecimalToScaled(
+      initialPrice,
+      this.scale,
+      "initialPrice",
+    );
+    this.slopeScaled = parseDecimalToScaled(
+      slope,
+      this.scale,
+      "slope",
+    );
+    this.maxSupply = ensureNonNegativeBigInt(maxSupply, "maxSupply");
+
+    if (this.maxSupply === 0n) {
+      throw new Error("maxSupply must be greater than zero");
+    }
+  }
+```
+
+```218:240:backend/src/zsa/bondingCurve.js
+    return {
+      amount: mintAmount.toString(),
+      currentSupply: supplyBefore.toString(),
+      newSupply: newSupply.toString(),
+      totalCost: formatScaledDecimal(
+        totalCostScaled,
+        this.scale,
+        this.decimals,
+      ),
+      averagePrice: formatScaledDecimal(
+        averagePriceScaled,
+        this.scale,
+        this.decimals,
+      ),
+      spotPriceBefore: formatScaledDecimal(
+        this.#priceAtSupply(supplyBefore),
+        this.scale,
+        this.decimals,
+      ),
+      spotPriceAfter: formatScaledDecimal(
+        this.#priceAtSupply(newSupply),
+        this.scale,
+        this.decimals,
+      ),
+    };
+```
+
+Example: load the mock in a script or REPL to quote the first issuance tranche.
+
+```js
+import { BondingCurveMock } from "../backend/src/zsa/bondingCurve.js";
+
+const curve = new BondingCurveMock({
+  initialPrice: "0.25",
+  slope: "0.00005",
+  maxSupply: BondingCurveMock.UINT64_MAX,
+});
+
+const mintPreview = curve.quoteMint({ amount: 1000n, currentSupply: 0n });
+
+console.log(mintPreview.totalCost); // "250.025"
+console.log(mintPreview.spotPriceAfter); // "0.275"
+```
+
+Include the bonding-curve configuration when creating a token to capture the economics snapshot alongside issuance metadata.
+
+```json
+POST /tokens
+{
+  "name": "MEOW",
+  "symbol": "MEOW",
+  "description": "Cat economy with bonding curve",
+  "recipientAddress": "zs1exampleaddress",
+  "initialSupply": "1000",
+  "finalize": false,
+  "bondingCurve": {
+    "initialPrice": "0.25",
+    "slope": "0.00005",
+    "decimals": 6,
+    "maxSupply": "1000000000"
+  }
+}
+```
+
+The backend stores the resolved curve plus the issuance preview under `metadata.bondingCurve.preview`, ready to drive dashboards or liquidity calculators.
 
 ## Prerequisites
 

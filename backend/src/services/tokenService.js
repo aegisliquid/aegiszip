@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { IssuanceKeys } from '../zsa/keys.js';
 import { IssuanceTransaction } from '../zsa/issuance.js';
+import { BondingCurveMock } from '../zsa/bondingCurve.js';
 import { computeAssetId, createAssetDescription } from '../zsa/crypto.js';
 import { TokenRepository } from '../repositories/tokenRepository.js';
 import { emitTokenEvent } from '../events/tokenEvents.js';
@@ -80,6 +81,43 @@ export class TokenService {
       finalize
     );
 
+    let bondingCurveDetails = null;
+
+    if (payload.bondingCurve) {
+      try {
+        const curve = new BondingCurveMock(payload.bondingCurve);
+        const mintPreview = curve.quoteMint({
+          currentSupply: payload.bondingCurve.currentSupply ?? 0n,
+          amount: initialSupply,
+        });
+
+        bondingCurveDetails = {
+          config: curve.getConfig(),
+          preview: {
+            amount: mintPreview.amount,
+            currentSupply: mintPreview.currentSupply,
+            newSupply: mintPreview.newSupply,
+            totalCost: mintPreview.totalCost,
+            averagePrice: mintPreview.averagePrice,
+            spotPriceBefore: mintPreview.spotPriceBefore,
+            spotPriceAfter: mintPreview.spotPriceAfter,
+          },
+        };
+      } catch (error) {
+        throw new Error(
+          `Invalid bonding curve configuration: ${error.message}`,
+        );
+      }
+    }
+
+    const metadata = {
+      ...(payload.metadata ?? {}),
+    };
+
+    if (bondingCurveDetails) {
+      metadata.bondingCurve = bondingCurveDetails;
+    }
+
     const tokenRecord = {
       external_id: uuidv4(),
       name,
@@ -99,7 +137,7 @@ export class TokenService {
       transaction_id: null,
       transaction: issuanceTx,
       error: null,
-      metadata: payload.metadata ?? {},
+      metadata,
       deployed_at: null,
       first_issuance: true,
     };
